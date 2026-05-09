@@ -22,6 +22,8 @@
     button { background:#2563eb; color:#fff; border:0; border-radius:8px; padding:10px 16px; cursor:pointer; }
     button:disabled { opacity:.7; cursor:not-allowed; }
     .status { margin-top:12px; font-size:14px; }
+    .debug { margin-top:16px; padding:12px; border:1px solid #d1d5db; border-radius:8px; background:#fafafa; }
+    .debug pre { white-space:pre-wrap; word-break:break-word; font-size:12px; max-height:300px; overflow:auto; }
   </style>
 </head>
 <body>
@@ -70,6 +72,10 @@
     </section>
 
     <div id="status" class="status"></div>
+    <div class="debug">
+      <strong>大模型输出信息</strong>
+      <pre id="debug">（暂无）</pre>
+    </div>
   </div>
 
   <script>
@@ -97,6 +103,20 @@
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+    }
+
+    
+    function downloadBase64Ppt(base64, filename) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], {type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
+      downloadBlob(blob, filename);
+    }
+
+    function renderDebug(data) {
+      const debugEl = document.getElementById('debug');
+      debugEl.textContent = JSON.stringify(data, null, 2);
     }
 
     function fileNameFromDisposition(disposition, fallback) {
@@ -127,10 +147,10 @@
           body: JSON.stringify(payload)
         });
         if (!resp.ok) throw new Error(await resp.text());
-        const blob = await resp.blob();
-        const filename = fileNameFromDisposition(resp.headers.get('Content-Disposition'), 'description_generated.pptx');
-        downloadBlob(blob, filename);
-        statusEl.textContent = '生成成功，已开始下载。';
+        const data = await resp.json();
+        renderDebug(data.llm_debug || {message: "未启用大模型或未返回调试信息"});
+        downloadBase64Ppt(data.ppt_base64, data.filename || "description_generated.pptx");
+        statusEl.textContent = "生成成功，已显示大模型输出并开始下载。";
       } catch (err) {
         statusEl.textContent = `生成失败：${err.message}`;
       } finally {
@@ -156,10 +176,10 @@
       try {
         const resp = await fetch('/api/ppt/from-file', { method: 'POST', body: form });
         if (!resp.ok) throw new Error(await resp.text());
-        const blob = await resp.blob();
-        const filename = fileNameFromDisposition(resp.headers.get('Content-Disposition'), 'file_generated.pptx');
-        downloadBlob(blob, filename);
-        statusEl.textContent = '生成成功，已开始下载。';
+        const data = await resp.json();
+        renderDebug(data.llm_debug || {message: "未启用大模型或未返回调试信息"});
+        downloadBase64Ppt(data.ppt_base64, data.filename || "file_generated.pptx");
+        statusEl.textContent = "生成成功，已显示大模型输出并开始下载。";
       } catch (err) {
         statusEl.textContent = `生成失败：${err.message}`;
       } finally {

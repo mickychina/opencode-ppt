@@ -1,10 +1,37 @@
-from typing import List
+from typing import Any, List
 
 from app.services.llm_generator import generate_slides_with_llm
 
 
 Slide = dict[str, str | list[str]]
 
+
+
+
+def _normalize_slides(raw_slides: list[dict[str, Any]], fallback_text: str) -> List[Slide]:
+    slides: List[Slide] = []
+    for idx, item in enumerate(raw_slides, start=1):
+        title = str(item.get("title") or item.get("heading") or f"第 {idx} 页").strip()
+
+        bullets_raw = item.get("bullets")
+        if bullets_raw is None:
+            bullets_raw = item.get("points") or item.get("content") or item.get("items") or []
+
+        if isinstance(bullets_raw, str):
+            bullets = [bullets_raw.strip()] if bullets_raw.strip() else []
+        elif isinstance(bullets_raw, list):
+            bullets = [str(x).strip() for x in bullets_raw if str(x).strip()]
+        else:
+            bullets = []
+
+        if not bullets:
+            bullets = [f"{title}：待补充要点"]
+
+        slides.append({"title": title, "bullets": bullets[:6]})
+
+    if not slides:
+        return [{"title": "项目概览", "bullets": [fallback_text[:120] or "待补充内容"]}]
+    return slides
 
 SECTION_HINTS = [
     "背景",
@@ -22,7 +49,7 @@ def parse_description_to_slides(description: str, use_llm: bool = True) -> List[
 
     if use_llm:
         try:
-            return generate_slides_with_llm(desc)
+            return _normalize_slides(generate_slides_with_llm(desc), desc)
         except Exception:
             pass
 
@@ -47,7 +74,7 @@ def parse_text_to_slides(text: str, use_llm: bool = True) -> List[Slide]:
     """把文本按段落切分成多页。"""
     if use_llm:
         try:
-            return generate_slides_with_llm(text)
+            return _normalize_slides(generate_slides_with_llm(text), text)
         except Exception:
             pass
 
