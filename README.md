@@ -12,7 +12,7 @@
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+python -m app.main
 ```
 
 访问：`http://127.0.0.1:8000/docs`
@@ -57,6 +57,8 @@ cp .env.example .env
 2. 编辑 `.env`：
 
 ```env
+HOST=127.0.0.1
+PORT=8000
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-4.1-mini
 OPENAI_BASE_URL=https://api.openai.com/v1
@@ -65,6 +67,8 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 ### 方式二：使用环境变量
 
 ```bash
+export HOST="127.0.0.1"
+export PORT="8000"
 export OPENAI_API_KEY="your_key"
 export OPENAI_MODEL="gpt-4.1-mini"
 # 可选：兼容网关
