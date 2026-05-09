@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PPT 生成器</title>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; margin: 0; background:#f5f7fb; color:#1f2937; }
+    .wrap { max-width: 900px; margin: 32px auto; background:#fff; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.08); padding:24px; }
+    h1 { margin-top:0; }
+    .row { display:flex; gap:16px; flex-wrap:wrap; }
+    .field { flex:1; min-width:220px; }
+    label { display:block; font-weight:600; margin-bottom:6px; }
+    input, select, textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #d1d5db; border-radius:8px; }
+    textarea{ min-height:140px; resize:vertical; }
+    .tabs { display:flex; gap:8px; margin:16px 0; }
+    .tab { border:1px solid #d1d5db; background:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .tab.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .actions { margin-top:16px; }
+    button { background:#2563eb; color:#fff; border:0; border-radius:8px; padding:10px 16px; cursor:pointer; }
+    button:disabled { opacity:.7; cursor:not-allowed; }
+    .status { margin-top:12px; font-size:14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>PPT 生成器</h1>
+    <p>输入描述或上传文本文件，点击生成并下载 PPT。</p>
+
+    <div class="row">
+      <div class="field">
+        <label for="title">标题（可选）</label>
+        <input id="title" placeholder="例如：AI 发展趋势" />
+      </div>
+      <div class="field">
+        <label for="style">风格</label>
+        <select id="style">
+          <option value="business">business</option>
+          <option value="minimal">minimal</option>
+          <option value="creative">creative</option>
+          <option value="education">education</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="use_llm">使用大模型</label>
+        <select id="use_llm">
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button type="button" class="tab active" data-panel="desc">文本描述</button>
+      <button type="button" class="tab" data-panel="file">上传文件</button>
+    </div>
+
+    <section id="desc" class="panel active">
+      <label for="description">描述</label>
+      <textarea id="description" placeholder="例如：做一份关于人工智能发展趋势的 6 页演示"></textarea>
+      <div class="actions"><button id="genDesc">生成并下载 PPT</button></div>
+    </section>
+
+    <section id="file" class="panel">
+      <label for="upload">选择 txt/md 文件</label>
+      <input id="upload" type="file" accept=".txt,.md,text/plain,text/markdown" />
+      <div class="actions"><button id="genFile">上传并下载 PPT</button></div>
+    </section>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+    const statusEl = document.getElementById('status');
+
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.panel).classList.add('active');
+      statusEl.textContent = '';
+    }));
+
+    function setLoading(btn, loading) {
+      btn.disabled = loading;
+      btn.textContent = loading ? '处理中...' : (btn.id === 'genDesc' ? '生成并下载 PPT' : '上传并下载 PPT');
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function fileNameFromDisposition(disposition, fallback) {
+      if (!disposition) return fallback;
+      const m = disposition.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i);
+      return m ? decodeURIComponent(m[1].replace(/\"/g, '').trim()) : fallback;
+    }
+
+    document.getElementById('genDesc').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const description = document.getElementById('description').value.trim();
+      if (description.length < 5) {
+        statusEl.textContent = '描述至少 5 个字符。';
+        return;
+      }
+      const payload = {
+        description,
+        title: document.getElementById('title').value.trim() || null,
+        style: document.getElementById('style').value,
+        use_llm: document.getElementById('use_llm').value === 'true'
+      };
+      setLoading(btn, true);
+      statusEl.textContent = '正在生成，请稍候...';
+      try {
+        const resp = await fetch('/api/ppt/from-description', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        const blob = await resp.blob();
+        const filename = fileNameFromDisposition(resp.headers.get('Content-Disposition'), 'description_generated.pptx');
+        downloadBlob(blob, filename);
+        statusEl.textContent = '生成成功，已开始下载。';
+      } catch (err) {
+        statusEl.textContent = `生成失败：${err.message}`;
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+
+    document.getElementById('genFile').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const file = document.getElementById('upload').files[0];
+      if (!file) {
+        statusEl.textContent = '请先选择文件。';
+        return;
+      }
+      const form = new FormData();
+      form.append('file', file);
+      form.append('style', document.getElementById('style').value);
+      form.append('title', document.getElementById('title').value.trim());
+      form.append('use_llm', document.getElementById('use_llm').value);
+
+      setLoading(btn, true);
+      statusEl.textContent = '正在上传并生成，请稍候...';
+      try {
+        const resp = await fetch('/api/ppt/from-file', { method: 'POST', body: form });
+        if (!resp.ok) throw new Error(await resp.text());
+        const blob = await resp.blob();
+        const filename = fileNameFromDisposition(resp.headers.get('Content-Disposition'), 'file_generated.pptx');
+        downloadBlob(blob, filename);
+        statusEl.textContent = '生成成功，已开始下载。';
+      } catch (err) {
+        statusEl.textContent = `生成失败：${err.message}`;
+      } finally {
+        setLoading(btn, false);
+      }
+    });
+  </script>
+</body>
+</html>
