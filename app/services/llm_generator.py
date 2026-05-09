@@ -19,6 +19,14 @@ def generate_slides_with_llm(user_input: str, max_slides: int = 8) -> list[dict[
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY 未配置")
 
+    return generate_slides_with_llm_debug(user_input, max_slides)["slides"]
+
+
+def generate_slides_with_llm_debug(user_input: str, max_slides: int = 8) -> dict[str, Any]:
+    api_key = settings.openai_api_key
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY 未配置")
+
     model = settings.openai_model
     base_url = settings.openai_base_url
     client = OpenAI(api_key=api_key, base_url=base_url)
@@ -37,9 +45,16 @@ def generate_slides_with_llm(user_input: str, max_slides: int = 8) -> list[dict[
         ],
         temperature=0.7,
     )
-    text = resp.output_text.strip()
-    data = json.loads(text)
+    output_text = resp.output_text.strip()
+    data = json.loads(output_text)
     slides = data.get("slides", [])
     if not slides:
         raise RuntimeError("大模型未返回有效 slides")
-    return slides
+
+    return {
+        "model": model,
+        "base_url": base_url,
+        "prompt": prompt,
+        "output_text": output_text,
+        "slides": slides,
+    }
